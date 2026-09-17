@@ -6,6 +6,24 @@
 >
 > 音频线（可选）：FFmpeg 从摄像头拉取 PCM → YAMNet + PANNs 双模型共识判哭声/人声 → 事件录音落盘 → ASR 模型转写描述。
 
+## 作者说
+
+项目思路：用 YOLO 识别画面里的人、宝宝等目标，**检测到了才把帧交给大模型**，识别内容由 prompt 配置，提示词完全自己写。建议两类用法：
+
+- **描述类**：比如「图片为家庭摄像头部分画面，按时间命名，家里有一个爸爸、一个妈妈、一个宝宝，请综合三个画面描述下」。可以一天之后再用大模型做总结——宝宝这一天都做了什么；
+- **警告类**：比如「宝宝是否趴睡了，回答是或否」。
+
+通知目前依赖 Home Assistant（HA），没有部署 HA 就没有办法主动通知。
+
+欢迎大家尝试、提意见。
+
+说明几点：
+
+- 本项目主要是 AI 写的，**建议让 AI 来部署和阅读**，代码质量一般；
+- 项目起因是家里 GPU 显存一般都不大，跑不了大模型，所以用 4B 以下的小模型来实现，**理论上 6G 显存就能跑**，具体请自行尝试；
+- 各模型默认是**分开单独跑**的，大模型自行启动，想换什么模型自己换就行；
+- 显存不够的话，可以让 ASR 模型和 VL（视觉）模型**循环启停**（互斥占用）：VL 模型存活时间给长一些，并关闭思考模式。VL 处理单次请求比 ASR 慢很多很多，ASR 单请求 1 秒不到。
+
 ## 功能特性
 
 - **视频接入**：本地视频文件 / ONVIF 摄像头（RTSP），1Hz 帧采样（FrameBus）
@@ -48,15 +66,41 @@ python -m daphne -b 127.0.0.1 -p 8124 config.asgi:application
 #    http://127.0.0.1:8124/                  首页
 #    http://127.0.0.1:8124/config/prompts/   VLM 检查项配置
 #    http://127.0.0.1:8124/config/cameras/   摄像头配置
+#
+# 6.（可选）音频检测需另装独立 venv，见下节「音频线安装」，
+#    不装的话音频功能不生效（主站不受影响）
 ```
 
-音频线运行在**独立 venv**（依赖 torch / tensorflow，与主环境隔离）：
+## 音频线安装（可选；要用音频检测必须做，否则音频功能不生效）
+
+音频检测（哭声/人声识别 + 录音 + ASR 转写）跑在**独立 venv** 里（依赖 torch /
+tensorflow，与主环境隔离，避免版本冲突）。`.venv-audio/` 不入库，**每个部署都
+要做一次**：
 
 ```powershell
+# 1. 在项目根（manage.py 所在目录）创建独立虚拟环境
 python -m venv .venv-audio
+
+# 2. 安装音频线依赖（torch / tensorflow 体积较大，请耐心等待）
 .venv-audio\Scripts\pip install -r requirements-audio.txt
-# 音频 worker 由网页「音频控制」页拉起，解释器路径可用 BABYCARE_AUDIO_PYTHON 覆盖
+
+# 3. 确认 .env 打开音频总开关（默认 false = 音频线永不启动）
+#    BABYCARE_AUDIO_ENABLED=true
+
+# 4. 确认 FFmpeg / FFprobe 在 PATH 上（或用 BABYCARE_FFMPEG_BIN 指定绝对路径）
+ffmpeg -version
 ```
+
+说明：
+
+- 音频 worker 进程由网页「**音频控制**」页拉起/停止，不需要手动启动；
+  web 侧默认用 `<项目根>/.venv-audio/Scripts/python.exe` 作为解释器
+  （`.env` 里 `BABYCARE_AUDIO_PYTHON` 可覆盖路径）。
+- 不装这个 venv（或路径不对）时：主站一切正常，但「音频控制」页会显示
+  worker 启动失败/无心跳，哭声检测、事件录音、ASR 转写**全部不生效**。
+- MySQL 用户注意：音频 venv 也要再装一次 `mysqlclient`（SQLite 无此问题）。
+- 前置条件：摄像头需开启音频（ONVIF Profile 带 AudioEncoderConfiguration），
+  事件描述功能还需另起 ASR llama-server（8136 端口，见「模型准备」）。
 
 ## 模型准备
 

@@ -16,7 +16,6 @@
       <li class="nav-item"><a class="nav-link{% if '/config/cameras' in request.path %} active{% endif %}" href="{% url 'config_panel:camera_list' %}">摄像头配置</a></li>
       <li class="nav-item"><a class="nav-link{% if '/config/notify-targets' in request.path %} active{% endif %}" href="{% url 'config_panel:notify_targets_list' %}">通知目标</a></li>
       <li class="nav-item"><a class="nav-link{% if '/events' in request.path %} active{% endif %}" href="/events/">事件</a></li>
-      <li class="nav-item"><a class="nav-link{% if '/logs' in request.path %} active{% endif %}" href="/logs/">日志</a></li>
       <li class="nav-item"><a class="nav-link{% if '/vlm-control' in request.path %} active{% endif %}" href="{% url 'dashboard:vlm_control' %}">VLM 控制</a></li>
       <li class="nav-item"><a class="nav-link{% if '/audio-control' in request.path %} active{% endif %}" href="{% url 'dashboard:audio_control' %}">音频控制</a></li>
       <li class="nav-item"><a class="nav-link{% if '/sound-detection' in request.path or '/sound-events' in request.path %} active{% endif %}" href="{% url 'dashboard:sound_detection_logs' %}">声音检测</a></li>
