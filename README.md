@@ -112,8 +112,8 @@ ffmpeg -version
 | `yolov8s.pt`（COCO 预训练） | 备用检测模型 | ✅ 随仓库提供 |
 | YAMNet SavedModel | 哭声/人声检测 | ✅ 随仓库提供 `model/yamnet/` |
 | PANNs 类别表 | 哭声/人声检测（第二意见） | ✅ 随仓库提供 `model/panns/class_labels_indices.csv`；权重 `Cnn14_mAP=0.431.pth`（约 300 MB）需自行下载到 `~\panns_data\`（`BABYCARE_AUDIO_PANNS_CHECKPOINT` 可覆盖） |
-| Qwen3.5-4B `*.gguf` + `mmproj-*.gguf` | VLM 判定 | ❌ 自行下载，`BABYCARE_LLAMA_MODEL_DIR` 指定任意目录 |
-| Qwen3-ASR-1.7B `*.gguf` | 音频转写（可选） | ❌ 自行下载，跑在 8136 端口 |
+| Qwen3.5-4B `*.gguf` + `mmproj-*.gguf` | VLM 判定 | ❌ 自行下载，`BABYCARE_LLAMA_MODEL_DIR` 指定任意目录。量化档位通常 **Q4_K_M 就够用** |
+| Qwen3-ASR-1.7B `*.gguf` | 音频转写（可选） | ❌ 自行下载，跑在 8136 端口。量化档位**能上 Q8 更好**（模型小，Q8 也占不了多少显存） |
 
 两个 YOLO 文件的说明：
 
