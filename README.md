@@ -115,6 +115,13 @@ ffmpeg -version
 | Qwen3.5-4B `*.gguf` + `mmproj-*.gguf` | VLM 判定 | ❌ 自行下载，`BABYCARE_LLAMA_MODEL_DIR` 指定任意目录 |
 | Qwen3-ASR-1.7B `*.gguf` | 音频转写（可选） | ❌ 自行下载，跑在 8136 端口 |
 
+两个 YOLO 文件的说明：
+
+- **`model/best.pt`**：可识别**婴儿**，是作者单独训练的模型，也是本项目的主检测模型。
+  如识别效果有问题，欢迎提 issue 反馈，作者会继续训练改进；
+- **`model/yolov8s.pt`**：YOLOv8 官方预训练模型（COCO），可识别**人、猫**等多种类型，
+  供扩展检测用途。
+
 llama-server 启动示例（VLM，端口 8082）：
 
 ```powershell
