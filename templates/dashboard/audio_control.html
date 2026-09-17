@@ -1,0 +1,240 @@
+{% extends "_base.html" %}
+{% block title %}音频控制{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">首页</a></li>
+    <li class="breadcrumb-item active">音频控制</li>
+  </ol>
+</nav>
+
+<h1 class="mb-3">音频控制（声音检测）</h1>
+
+{% if not audio.enabled %}
+  <div class="alert alert-warning">
+    当前 <code>BABYCARE_AUDIO_ENABLED</code> 未开启，音频线不会被拉起（含 daphne 启动期的自动拉起）。请在 <code>.env</code> 中打开后重启 daphne。
+  </div>
+{% endif %}
+
+{% if audio.stale %}
+  <div class="alert alert-danger">
+    检测到音频 worker <strong>进程存活但心跳停止</strong>（可能已卡死）。建议「关闭音频线」后重新开启，让进程树完整重建。
+  </div>
+{% elif audio.starting %}
+  <div class="alert alert-info">
+    worker <strong>正在启动</strong>：加载 YAMNet / PANNs 模型并等待首包，约需 15~40 秒。
+    这段时间内还没有心跳属正常现象，超过 {{ audio.startup_grace_sec|floatformat:0 }} 秒仍未就绪才会判「卡死」。刷新本页看进度。
+  </div>
+{% endif %}
+
+<div class="row g-3">
+
+  <!-- 卡片 1：worker 进程 -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Worker 进程</strong></div>
+      <div class="card-body">
+        <dl class="row mb-2">
+          <dt class="col-sm-5">运行中</dt>
+          <dd class="col-sm-7">
+            {% if audio.starting %}
+              <span class="badge bg-info text-dark">启动中</span>
+            {% elif audio.running %}
+              {% if audio.stale %}
+                <span class="badge bg-danger">卡死</span>
+              {% else %}
+                <span class="badge bg-success">RUNNING</span>
+              {% endif %}
+            {% else %}
+              <span class="badge bg-secondary">STOPPED</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5">用户期望状态</dt>
+          <dd class="col-sm-7">
+            {% if audio.desired == "on" %}
+              <span class="badge bg-primary">on</span>
+            {% else %}
+              <span class="badge bg-secondary">off</span>
+            {% endif %}
+            <small class="text-muted">（desired=off 时重启 daphne 不会自动拉起）</small>
+          </dd>
+          <dt class="col-sm-5">PID</dt>
+          <dd class="col-sm-7">
+            <code>{{ audio.pid|default_if_none:"-" }}</code>
+            {% if audio.lease_pid and audio.lease_pid != audio.pid %}
+              <small class="text-muted">
+                （venv 启动器；worker 实际进程 <code>{{ audio.lease_pid }}</code>）
+              </small>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5">租约 epoch</dt>
+          <dd class="col-sm-7"><code>{{ audio.worker_epoch|slice:":8"|default:"-" }}</code>
+            <small class="text-muted">（实例互斥用；同刻只允许一个 worker）</small>
+          </dd>
+          <dt class="col-sm-5">本进程记录的运行时长</dt>
+          <dd class="col-sm-7">{{ audio.uptime_sec|floatformat:0 }} 秒
+            <small class="text-muted">（重启 daphne 后归零，属正常）</small>
+          </dd>
+        </dl>
+
+        <form method="post" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" formaction="{% url 'dashboard:audio_control_on' %}"
+                  class="btn btn-success btn-sm"
+                  {% if audio.running or not audio.enabled %}disabled{% endif %}>
+            开启音频线
+          </button>
+        </form>
+        <form method="post" class="d-inline ms-2">
+          {% csrf_token %}
+          <button type="submit" formaction="{% url 'dashboard:audio_control_off' %}"
+                  class="btn btn-warning btn-sm"
+                  {% if not audio.running %}disabled{% endif %}>
+            关闭音频线
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 2：健康（DB 心跳） -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>健康状态（DB 心跳）</strong></div>
+      <div class="card-body">
+        <dl class="row mb-2">
+          <dt class="col-sm-5">心跳</dt>
+          <dd class="col-sm-7">
+            {% if audio.heartbeat_ok %}
+              <span class="badge bg-success">正常</span>
+            {% else %}
+              <span class="badge bg-danger">异常</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5">最近一次心跳</dt>
+          <dd class="col-sm-7">
+            {% if audio.starting %}
+              <span class="text-muted">等待首次心跳…</span>
+            {% elif audio.heartbeat_age_sec is None %}
+              <span class="text-muted">从未</span>
+            {% else %}
+              {{ audio.heartbeat_age_sec|floatformat:1 }} 秒前
+            {% endif %}
+            <small class="text-muted">（超 {{ audio.heartbeat_timeout_sec|floatformat:0 }}s 判死）</small>
+          </dd>
+        </dl>
+        <p class="text-muted small mb-0">
+          两条信号分工：<strong>PID 文件</strong>管启停、<strong>DB 心跳</strong>管健康。只看 PID 无法发现
+          "进程活着但卡住"，所以两态都要看。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 3：摄像头采集状态 -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><strong>摄像头采集状态</strong></div>
+      <div class="card-body">
+        {% if audio.cameras %}
+          <table class="table table-sm mb-0">
+            <thead>
+              <tr><th>摄像头</th><th>状态</th><th>最近收包</th><th>最近错误</th></tr>
+            </thead>
+            <tbody>
+              {% for c in audio.cameras %}
+              <tr>
+                <td>{{ c.camera_name }} <small class="text-muted">#{{ c.camera_id }}</small></td>
+                <td>
+                  {% if c.status == "ready" %}
+                    <span class="badge bg-success">{{ c.status_display }}</span>
+                  {% elif c.status == "stopped" or c.status == "disabled" %}
+                    <span class="badge bg-secondary">{{ c.status_display }}</span>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">{{ c.status_display }}</span>
+                  {% endif %}
+                </td>
+                <td class="small">{{ c.last_packet_at|default_if_none:"-" }}</td>
+                <td class="text-danger small">{{ c.last_error|default:"" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted mb-0">暂无数据（worker 还没运行过，或系统里没有启用的 ONVIF 摄像头）。</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 4：环境与文件 -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><strong>环境与文件</strong></div>
+      <div class="card-body">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><td style="width: 22rem;"><code>BABYCARE_AUDIO_ENABLED</code></td><td>{{ audio.enabled|yesno:"true,false" }}</td></tr>
+            <tr><td><code>BABYCARE_AUDIO_PYTHON</code></td><td><code>{{ audio.python }}</code></td></tr>
+            <tr>
+              <td><code>BABYCARE_AUDIO_DESC_SERVER_URL</code></td>
+              <td>
+                {% if audio.audio_desc_configured %}
+                  <code>{{ audio.audio_desc_url }}</code>
+                  <span class="text-muted small">
+                    （{{ audio.audio_desc_provider }} / {{ audio.audio_desc_model|default:"未填模型名" }}）
+                  </span>
+                {% else %}
+                  <span class="text-muted">未配置（事件停留在 pending_description）</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td>描述队列 / 熔断</td>
+              <td>
+                {% if audio.audio_desc_breaker.enabled %}
+                  <span class="badge bg-{% if audio.audio_desc_breaker.state == 'open' %}danger{% elif audio.audio_desc_breaker.state == 'half_open' %}warning text-dark{% else %}secondary{% endif %}">
+                    {{ audio.audio_desc_breaker.state }}
+                  </span>
+                {% else %}
+                  <span class="text-muted">熔断已关闭（BABYCARE_LLM_BREAKER_ENABLED=false）</span>
+                {% endif %}
+                <span class="ms-2">待描述 <strong>{{ audio.queue_pending }}</strong> · 描述中 <strong>{{ audio.queue_describing }}</strong></span>
+                {% if audio.queue_oldest_age_sec is not None %}
+                  <span class="text-muted small ms-2">最老一条 {{ audio.queue_oldest_age_sec }}s 前</span>
+                {% endif %}
+                {% if audio.audio_desc_breaker.consecutive_failures %}
+                  <span class="text-muted small ms-2">连续失败 {{ audio.audio_desc_breaker.consecutive_failures }} 次</span>
+                {% endif %}
+                <div class="text-muted small mt-1">
+                  熔断状态住在 audio_worker 进程里，这里读的是它写下的 DB 行。
+                </div>
+                {% if audio.audio_desc_breaker.last_error %}
+                  <div class="text-muted small">{{ audio.audio_desc_breaker.last_error|truncatechars:120 }}</div>
+                {% endif %}
+              </td>
+            </tr>
+            <tr><td>PID 文件</td><td><code>{{ audio.pid_file }}</code></td></tr>
+            <tr><td>日志文件</td><td><code>{{ audio.log_file }}</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 5：日志尾巴 -->
+  {% if log_tail %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><strong>日志尾部</strong> <small class="text-muted">（最近 {{ log_tail|length }} 字符）</small></div>
+      <div class="card-body">
+        <pre class="small mb-0" style="max-height: 22rem; overflow: auto;">{{ log_tail }}</pre>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+{% endblock %}

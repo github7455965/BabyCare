@@ -1,0 +1,69 @@
+{% extends "_base.html" %}
+{% block title %}{% if obj %}编辑 #{{ obj.pk }}{% else %}新建通知目标{% endif %}{% endblock %}
+{% block content %}
+<h1>
+  {% if obj %}编辑 #{{ obj.pk }} {{ obj.name }}{% else %}新建通知目标{% endif %}
+</h1>
+<form method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+  <div class="card mb-2">
+    <div class="card-header">基础</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.name.label }}{% if form.name.field.required %} *{% endif %}</label>
+        {{ form.name }}
+        {% if form.name.help_text %}<div class="form-text">{{ form.name.help_text }}</div>{% endif %}
+        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.kind.label }}{% if form.kind.field.required %} *{% endif %}</label>
+        {{ form.kind }}
+        {% if form.kind.help_text %}<div class="form-text">{{ form.kind.help_text }}</div>{% endif %}
+        {% if form.kind.errors %}<div class="text-danger small">{{ form.kind.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.target_id.label }}{% if form.target_id.field.required %} *{% endif %}</label>
+        {{ form.target_id }}
+        {% if form.target_id.help_text %}<div class="form-text">{{ form.target_id.help_text }}</div>{% endif %}
+        {% if form.target_id.errors %}<div class="text-danger small">{{ form.target_id.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">控制</div>
+    <div class="card-body">
+      <div class="form-check mb-3">
+        {{ form.enabled }}
+        <label class="form-check-label">{{ form.enabled.label }}</label>
+        {% if form.enabled.help_text %}<div class="form-text">{{ form.enabled.help_text }}</div>{% endif %}
+        {% if form.enabled.errors %}<div class="text-danger small">{{ form.enabled.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">保存</button>
+  <a class="btn btn-secondary" href="{% url 'config_panel:notify_targets_list' %}">返回列表</a>
+</form>
+
+{% if obj %}
+<hr>
+<div class="card mb-3">
+  <div class="card-header">被 Prompt 引用（<strong>{{ referenced_by }}</strong> 个）</div>
+  <ul class="list-group list-group-flush">
+    {% for p in referenced_prompts %}
+      <li class="list-group-item"><a href="{% url 'config_panel:prompt_detail' p.pk %}">{{ p.name }}</a></li>
+    {% empty %}
+      <li class="list-group-item text-muted">无</li>
+    {% endfor %}
+  </ul>
+</div>
+<form method="post" action="{% url 'config_panel:notify_target_delete' obj.pk %}"
+      onsubmit="return confirm('删除 #{{ obj.pk }} {{ obj.name }}？')">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-outline-danger">删除</button>
+</form>
+{% endif %}
+{% endblock %}

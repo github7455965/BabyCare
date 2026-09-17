@@ -1,0 +1,75 @@
+{% extends "_base.html" %}
+{% block title %}摄像头配置{% endblock %}
+{% block content %}
+<h1>摄像头配置 <a class="btn btn-primary btn-sm" href="{% url 'config_panel:camera_create' %}">新建摄像头</a></h1>
+
+<form method="get" class="row row-cols-1 row-cols-md-3 g-2 mb-3 align-items-end">
+  <div class="col">
+    <label class="form-label small">源类型</label>
+    <select name="source_type" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="file" {% if filters.source_type == "file" %}selected{% endif %}>视频文件</option>
+      <option value="onvif" {% if filters.source_type == "onvif" %}selected{% endif %}>ONVIF</option>
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">启用</label>
+    <select name="is_active" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="1" {% if filters.is_active == "1" %}selected{% endif %}>启用</option>
+      <option value="0" {% if filters.is_active == "0" %}selected{% endif %}>禁用</option>
+    </select>
+  </div>
+  <div class="col">
+    <button type="submit" class="btn btn-primary btn-sm">过滤</button>
+    <a href="{% url 'config_panel:camera_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+  </div>
+</form>
+
+<table class="table table-striped">
+  <thead><tr>
+    <th>#</th><th>名称</th><th>源类型</th><th>状态</th><th>被 N 个 Prompt 引用</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for cam in page.object_list %}
+    <tr>
+      <td>{{ cam.pk }}</td>
+      <td><a href="{% url 'config_panel:camera_detail' cam.pk %}">{{ cam.name }}</a></td>
+      <td>{{ cam.get_source_type_display }}</td>
+      <td>
+        {% if cam.is_active %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">禁用</span>{% endif %}
+      </td>
+      <td>{{ cam.prompt_configs.count }}</td>
+      <td>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'config_panel:camera_detail' cam.pk %}">详情</a>
+        <form method="post" action="{% url 'config_panel:camera_delete' cam.pk %}"
+              style="display:inline" onsubmit="return confirm('删除 #{{ cam.pk }} {{ cam.name }}？')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger">删</button>
+        </form>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-muted">暂无。点上方"新建摄像头"。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if page.paginator.num_pages > 1 %}
+<nav aria-label="page">
+  <ul class="pagination pagination-sm">
+    {% if page.has_previous %}
+      <li class="page-item"><a class="page-link" href="?{% if filters.source_type %}source_type={{ filters.source_type }}&{% endif %}{% if filters.is_active %}is_active={{ filters.is_active }}&{% endif %}page={{ page.previous_page_number }}">上一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">上一页</span></li>
+    {% endif %}
+    <li class="page-item active"><span class="page-link">{{ page.number }} / {{ page.paginator.num_pages }}</span></li>
+    {% if page.has_next %}
+      <li class="page-item"><a class="page-link" href="?{% if filters.source_type %}source_type={{ filters.source_type }}&{% endif %}{% if filters.is_active %}is_active={{ filters.is_active }}&{% endif %}page={{ page.next_page_number }}">下一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">下一页</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

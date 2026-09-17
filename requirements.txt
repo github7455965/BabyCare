@@ -1,0 +1,20 @@
+# 09_web_vlm_manage 依赖
+# Step 1 已经过 venv 验证（django 5.1.15 / channels 4.3.2 / ultralytics 8.4.90 / opencv / requests / Pillow / python-dotenv 都装好了）
+
+Django>=5.0,<5.2
+channels>=4.0
+daphne>=4.0
+opencv-python>=4.9
+ultralytics>=8.2
+requests>=2.31
+Pillow>=10.0
+python-dotenv>=1.0
+
+# 数据库驱动
+# 默认 DB_ENGINE=sqlite 用 Python 自带的 sqlite3，**不需要任何驱动**。
+# 只有 DB_ENGINE=mysql 才需要下面这条（Linux 上还要先装 libmysqlclient-dev / pkg-config）：
+#   pip install mysqlclient
+# mysqlclient>=2.2
+
+# ASGI channel layer：Step 1 用内存版；后续多 worker 再换 redis
+# channels-redis>=4.2

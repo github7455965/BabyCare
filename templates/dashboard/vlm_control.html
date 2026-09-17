@@ -1,0 +1,161 @@
+{% extends "_base.html" %}
+{% block title %}VLM 控制{% endblock %}
+{% block content %}
+
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">首页</a></li>
+    <li class="breadcrumb-item active">VLM 控制</li>
+  </ol>
+</nav>
+
+<h1 class="mb-3">VLM 控制（常驻模式）</h1>
+
+{% if not resident_mode %}
+  <div class="alert alert-warning">
+    当前 <code>BABYCARE_LLM_RESIDENT</code> 未开启，VLM 按原循环模式运行（每次 VLM 调用 acquire / 启 llama / release / 卸 llama）。本页的手动按钮不会生效，队列始终为空。
+  </div>
+{% endif %}
+
+{% if external %}
+  <div class="alert alert-info">
+    <strong>外部模式</strong>（<code>BABYCARE_LLAMA_EXTERNAL=1</code>）：
+    llama-server 跑在另一台机器上（<code>{{ llama_url }}</code>），<strong>本页不能启停它</strong>。
+    可用性由远端 <code>/health</code> + 熔断器判定；服务不可用时窗口自动入队等回放。
+    启停请在推理机上用本地脚本（<code>model/run_asr_server.bat</code>、
+    <code>scripts/tmp/start_llm_audio.ps1</code>）操作。
+  </div>
+{% endif %}
+
+<div class="row g-3">
+
+  <!-- 卡片 1：Llama 状态 -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>Llama 状态</strong></div>
+      <div class="card-body">
+        <dl class="row mb-2">
+          <dt class="col-sm-5">运行中</dt>
+          <dd class="col-sm-7">
+            {% if llama.running %}
+              <span class="badge bg-success">RUNNING</span>
+            {% else %}
+              <span class="badge bg-secondary">STOPPED</span>
+            {% endif %}
+            {% if llama.forced_off %}
+              <span class="badge bg-warning text-dark">手动关闭</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5">PID</dt>
+          <dd class="col-sm-7"><code>{{ llama.pid|default_if_none:"-" }}</code></dd>
+          <dt class="col-sm-5">Uptime</dt>
+          <dd class="col-sm-7">
+            {{ llama.uptime_hours }} 小时
+            <small class="text-muted">（阈值 {{ llama.max_uptime_hours }}h）</small>
+          </dd>
+          <dt class="col-sm-5">自动重启</dt>
+          <dd class="col-sm-7">
+            {% if auto_restart_hours > 0 %}
+              每 {{ auto_restart_hours }} 小时
+            {% else %}
+              <span class="text-muted">已关闭（BABYCARE_LLM_AUTO_RESTART_HOURS=0）</span>
+            {% endif %}
+          </dd>
+          <dt class="col-sm-5">熔断</dt>
+          <dd class="col-sm-7">
+            {% if not breaker.enabled %}
+              <span class="text-muted">已关闭（BABYCARE_LLM_BREAKER_ENABLED=false）</span>
+            {% else %}
+              <span class="badge bg-{% if breaker.state == 'open' %}danger{% elif breaker.state == 'half_open' %}warning text-dark{% else %}secondary{% endif %}">
+                {{ breaker.state|default:"closed" }}
+              </span>
+              {% if breaker.consecutive_failures %}
+                <span class="text-muted small ms-2">连续失败 {{ breaker.consecutive_failures }} 次</span>
+              {% endif %}
+              {% if breaker.last_error %}
+                <div class="text-muted small">{{ breaker.last_error|truncatechars:120 }}</div>
+              {% endif %}
+            {% endif %}
+          </dd>
+        </dl>
+
+        <form method="post" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" formaction="{% url 'dashboard:vlm_llama_on' %}"
+                  class="btn btn-success btn-sm"
+                  {% if external %}disabled title="外部模式：请在推理机上操作"{% elif llama.running and not llama.forced_off %}disabled{% endif %}>
+            开启 llama-server
+          </button>
+        </form>
+        <form method="post" class="d-inline ms-2">
+          {% csrf_token %}
+          <button type="submit" formaction="{% url 'dashboard:vlm_llama_off' %}"
+                  class="btn btn-warning btn-sm"
+                  {% if external %}disabled title="外部模式：请在推理机上操作"{% elif llama.forced_off %}disabled{% endif %}>
+            关闭 llama-server
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 2：请求队列 -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>请求队列（VLMQueuedTask）</strong></div>
+      <div class="card-body">
+        <dl class="row mb-2">
+          <dt class="col-sm-5">待处理（pending）</dt>
+          <dd class="col-sm-7">
+            <span class="badge bg-primary">{{ queue.pending }}</span>
+          </dd>
+          <dt class="col-sm-5">失败（failed）</dt>
+          <dd class="col-sm-7">
+            <span class="badge bg-danger">{{ queue.failed }}</span>
+          </dd>
+          <dt class="col-sm-5">已完成（done）</dt>
+          <dd class="col-sm-7">
+            <span class="badge bg-success">{{ queue.done }}</span>
+          </dd>
+          <dt class="col-sm-5">最老一条待回放</dt>
+          <dd class="col-sm-7">
+            {% if queue.oldest_age_sec is not None %}
+              {{ queue.oldest_age_sec }} 秒前入队
+            {% else %}
+              <span class="text-muted">-</span>
+            {% endif %}
+          </dd>
+        </dl>
+        <p class="text-muted small mb-0">
+          drainer 每 {{ drain_interval_sec }} 秒轮询一次，按 <strong>newest-first</strong> 回放
+          （最近的最有价值）；单条失败重试 {{ max_retries }} 次后标记 failed。
+          {% if queue_max_age_sec > 0 %}
+            超过 {{ queue_max_age_sec }} 秒仍未回放的会被标成 <code>expired</code>。
+          {% else %}
+            <span class="text-muted">超期收割已关闭（<code>BABYCARE_LLM_QUEUE_MAX_AGE_SEC=0</code>）。</span>
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片 3：环境 -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><strong>环境配置</strong></div>
+      <div class="card-body">
+        <table class="table table-sm mb-0">
+          <tbody>
+            <tr><td><code>BABYCARE_LLM_RESIDENT</code></td><td>{{ resident_mode|yesno:"true,false" }}</td></tr>
+            <tr><td><code>BABYCARE_LLM_AUTO_RESTART_HOURS</code></td><td>{{ auto_restart_hours }}</td></tr>
+            <tr><td><code>BABYCARE_LLM_QUEUE_DRAIN_INTERVAL_SEC</code></td><td>{{ drain_interval_sec }}</td></tr>
+            <tr><td><code>BABYCARE_LLM_QUEUE_MAX_RETRIES</code></td><td>{{ max_retries }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

@@ -1,0 +1,200 @@
+{% extends "_base.html" %}
+{% block title %}音频事件 #{{ ev.pk }}{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">首页</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'dashboard:sound_detection_logs' %}">声音检测日志</a></li>
+    <li class="breadcrumb-item active">事件 #{{ ev.pk }}</li>
+  </ol>
+</nav>
+
+<h1 class="mb-3">音频事件 #{{ ev.pk }}
+  {% if ev.status == "completed" %}
+    <span class="badge bg-success">{{ ev.get_status_display }}</span>
+  {% elif ev.status == "failed" %}
+    <span class="badge bg-danger">{{ ev.get_status_display }}</span>
+  {% elif ev.status == "recording" %}
+    <span class="badge bg-info text-dark">{{ ev.get_status_display }}</span>
+  {% else %}
+    <span class="badge bg-secondary">{{ ev.get_status_display }}</span>
+  {% endif %}
+  {% if ev.degraded %}<span class="badge bg-warning text-dark">degraded</span>{% endif %}
+</h1>
+
+{% if ev.degraded %}
+  <div class="alert alert-warning py-2 small">
+    事件期间发生采集中断 / 模型异常（capture_gap），结束原因不是静音 —— 时间线可能不完整。
+  </div>
+{% endif %}
+
+<dl class="row">
+  <dt class="col-sm-2">摄像头</dt>
+  <dd class="col-sm-10">{% if ev.camera %}{{ ev.camera.name }}{% else %}<span class="text-muted">已删</span>{% endif %}</dd>
+
+  <dt class="col-sm-2">真实起止<small class="text-muted ms-2">（epoch 秒）</small></dt>
+  <dd class="col-sm-10">
+    {{ ev.started_at_ts }}{% if ev.ended_at_ts %} → {{ ev.ended_at_ts }}{% else %} → <span class="text-muted">进行中</span>{% endif %}
+  </dd>
+
+  <dt class="col-sm-2">起止时间<small class="text-muted ms-2">（本地展示）</small></dt>
+  <dd class="col-sm-10">
+    {{ started_at_human|default:"-" }}{% if ended_at_human %} → {{ ended_at_human }}{% endif %}
+  </dd>
+
+  <dt class="col-sm-2">录音时长</dt>
+  <dd class="col-sm-10">{{ ev.duration_sec }} 秒
+    <small class="text-muted">（= 真实声音 + 后录尾巴；描述分段用的是真实起止，不是这个长度）</small>
+  </dd>
+
+  <dt class="col-sm-2">录音前导</dt>
+  <dd class="col-sm-10">{{ ev.recording_lead_sec }} 秒
+    <small class="text-muted">（录音起点比事件起点早多少秒；事件内偏移 = 录音内偏移 − 该值）</small>
+  </dd>
+
+  <dt class="col-sm-2">音频文件</dt>
+  <dd class="col-sm-10">
+    {% if ev.audio_path %}
+      <code class="small">{{ ev.audio_path }}</code>（{{ ev.audio_format }}）
+    {% else %}<span class="text-muted">无（落盘失败或未产生 PCM）</span>{% endif %}
+  </dd>
+
+  <dt class="col-sm-2">描述状态</dt>
+  <dd class="col-sm-10">
+    {{ ev.get_description_status_display }}
+    {% if ev.moss_model %}<small class="text-muted">（{{ ev.moss_model }}）</small>{% endif %}
+  </dd>
+
+  <dt class="col-sm-2">产出实例</dt>
+  <dd class="col-sm-10"><code>{{ ev.worker_epoch|slice:":8"|default:"-" }}</code></dd>
+</dl>
+
+<h3>录音</h3>
+{% if has_audio %}
+  <audio controls preload="none" src="{% url 'dashboard:audio_event_file' ev.pk %}" class="w-100"></audio>
+  <p class="text-muted small mt-1">
+    FLAC 直出（浏览器原生支持）；文件不在媒体目录内或已被清理时会 404。
+  </p>
+{% else %}
+  <p class="text-muted">该事件没有可用录音文件。</p>
+{% endif %}
+
+<h3 class="mt-4">哭声 / 说话声时间线</h3>
+<table class="table table-sm">
+  <thead><tr><th>标签</th><th>首次阳性</th><th>最后阳性</th><th>阳性窗口（事件内偏移）</th></tr></thead>
+  <tbody>
+  {% for l in labels %}
+    <tr>
+      <td>{{ l.display }}</td>
+      <td class="small">{{ l.first|default:"-" }}</td>
+      <td class="small">{{ l.last|default:"-" }}</td>
+      <td class="small">
+        {% for w in l.windows %}
+          <div>{{ w.start_offset }}s ~ {{ w.end_offset }}s <span class="text-muted">（{{ w.start }} → {{ w.end }}）</span></div>
+        {% empty %}<span class="text-muted">-</span>{% endfor %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4" class="text-muted">无检测标签。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3 class="mt-4">静音点时间轴<small class="text-muted ms-2">（相对事件起点）</small></h3>
+{% if silences %}
+  <table class="table table-sm">
+    <thead><tr><th>#</th><th>起点(s)</th><th>终点(s)</th><th>时长(s)</th></tr></thead>
+    <tbody>
+      {% for s in silences %}
+        <tr><td>{{ forloop.counter }}</td><td>{{ s.start }}</td><td>{{ s.end }}</td><td>{{ s.duration }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted small">无静音区间（事件较短，或全程都有声音）。</p>
+{% endif %}
+
+<h3 class="mt-4">分段列表<small class="text-muted ms-2">（10–60 秒，优先在静音点切）</small></h3>
+<table class="table table-sm align-middle">
+  <thead><tr><th>#</th><th>偏移(s)</th><th>时长(s)</th><th>描述状态</th><th>试听</th><th>片段描述</th></tr></thead>
+  <tbody>
+  {% for seg in segments %}
+    <tr>
+      <td>{{ seg.sequence }}</td>
+      <td>{{ seg.start_offset }} ~ {{ seg.end_offset }}</td>
+      <td>{{ seg.duration_sec }}</td>
+      <td>
+        {{ seg.get_description_status_display }}
+        {% if seg.retry_count %}<small class="text-muted">（重试 {{ seg.retry_count }}）</small>{% endif %}
+        {% if seg.last_error %}<div class="text-danger small">{{ seg.last_error }}</div>{% endif %}
+      </td>
+      <td>
+        {% if seg.audio_path %}
+          <audio controls preload="none" style="width: 16rem;"
+                 src="{% url 'dashboard:audio_segment_file' ev.pk seg.sequence %}"></audio>
+        {% else %}<span class="text-muted small">无文件</span>{% endif %}
+      </td>
+      <td class="small"><code>{{ seg.description_json|default:"-" }}</code></td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-muted">无分段（事件短于分段下限，直接整段描述）。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h3 class="mt-4">结构化描述</h3>
+{% if ev.description_json %}
+  <pre class="small bg-light border p-2">{{ ev.description_json }}</pre>
+{% else %}
+  <p class="text-muted small">尚无结构化描述（待描述 / 描述失败 / 未配置描述服务）。</p>
+{% endif %}
+
+{% if ev.description_raw %}
+  <details>
+    <summary class="small text-muted">描述模型原始返回</summary>
+    <pre class="small bg-light border p-2">{{ ev.description_raw }}</pre>
+  </details>
+{% endif %}
+
+<h3 class="mt-4">关联的 Prompt 事件与通知条件</h3>
+{% if state_links %}
+  <table class="table table-sm align-middle">
+    <thead><tr>
+      <th>Prompt 事件</th><th>检查项</th><th>命中时刻</th><th>音频三态快照</th><th>目标投递（condition）</th>
+    </tr></thead>
+    <tbody>
+    {% for link in state_links %}
+      <tr>
+        <td>
+          {% if link.vlm_state %}
+            <a href="{% url 'dashboard:event_detail' link.vlm_state.pk %}">#{{ link.vlm_state.pk }}</a>
+          {% else %}<span class="text-muted">-</span>{% endif %}
+        </td>
+        <td class="small">{{ link.prompt.name|default:"-" }}</td>
+        <td class="small">{{ link.created_at|date:"Y-m-d H:i:s" }}</td>
+        <td class="small"><code>{{ link.snapshot }}</code></td>
+        <td class="small">
+          {% for d in link.deliveries %}
+            <div>
+              {{ d.notify_target.name }}
+              <span class="badge bg-light text-dark border">{{ d.condition|default:"-" }}</span>
+              <span class="badge {% if d.delivered %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ d.audio_state }}{% if d.delivered %} · 已发{% else %} · 未发{% endif %}
+              </span>
+              {% if d.error %}<span class="text-danger">{{ d.error }}</span>{% endif %}
+            </div>
+          {% empty %}
+            <span class="text-muted">无投递记录</span>
+          {% endfor %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted small">
+    该事件没有关联的 Prompt 命中。这正常 —— 音频事件随时都在产生，
+    只有恰好撞上「Prompt 命中窗口」的事件才会被引用。
+  </p>
+{% endif %}
+{% endblock %}

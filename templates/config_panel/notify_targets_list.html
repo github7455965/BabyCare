@@ -1,0 +1,58 @@
+{% extends "_base.html" %}
+{% block title %}通知目标{% endblock %}
+{% block content %}
+<h1>通知目标 <a class="btn btn-primary btn-sm" href="{% url 'config_panel:notify_target_create' %}">新建通知目标</a></h1>
+
+<p class="text-muted small">
+  命中 VLM 后要发通知的目标。先在这里创建，再到「VLM 检查项」详情页勾选。
+  字段说明见 <a href="https://www.home-assistant.io/integrations/notify/">HA notify 文档</a>。
+</p>
+
+<table class="table table-striped">
+  <thead><tr>
+    <th>#</th><th>名称</th><th>类型</th><th>target_id</th><th>状态</th><th>被 N 个 Prompt 引用</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for t in page.object_list %}
+    <tr>
+      <td>{{ t.pk }}</td>
+      <td><a href="{% url 'config_panel:notify_target_detail' t.pk %}">{{ t.name }}</a></td>
+      <td>{{ t.get_kind_display }}</td>
+      <td><code>{{ t.target_id }}</code></td>
+      <td>
+        {% if t.enabled %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">禁用</span>{% endif %}
+      </td>
+      <td>{{ t.prompts.count }}</td>
+      <td>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'config_panel:notify_target_detail' t.pk %}">详情</a>
+        <form method="post" action="{% url 'config_panel:notify_target_delete' t.pk %}"
+              style="display:inline" onsubmit="return confirm('删除 #{{ t.pk }} {{ t.name }}？')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger">删</button>
+        </form>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="text-muted">暂无。点上方「新建通知目标」。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if page.paginator.num_pages > 1 %}
+<nav aria-label="page">
+  <ul class="pagination pagination-sm">
+    {% if page.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page.previous_page_number }}">上一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">上一页</span></li>
+    {% endif %}
+    <li class="page-item active"><span class="page-link">{{ page.number }} / {{ page.paginator.num_pages }}</span></li>
+    {% if page.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page.next_page_number }}">下一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">下一页</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends "_base.html" %}
+{% block title %}事件{% endblock %}
+{% block content %}
+<h1>事件</h1>
+
+<form method="get" class="row row-cols-1 row-cols-md-6 g-2 mb-3 align-items-end">
+  <div class="col">
+    <label class="form-label small">摄像头</label>
+    <select name="cam_id" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for c in cameras %}
+        <option value="{{ c.pk }}" {% if filters.cam_id == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.id }} · {{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">检查项</label>
+    <select name="prompt_id" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for p in prompts %}
+        <option value="{{ p.pk }}" {% if filters.prompt_id == p.pk|stringformat:"s" %}selected{% endif %}>{{ p.id }} · {{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">类型</label>
+    <select name="kind" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="judge" {% if filters.kind == "judge" %}selected{% endif %}>判断（judge）</option>
+      <option value="describe" {% if filters.kind == "describe" %}selected{% endif %}>描述（describe）</option>
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">命中</label>
+    <select name="hit" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="1" {% if filters.hit == "1" %}selected{% endif %}>命中</option>
+      <option value="0" {% if filters.hit == "0" %}selected{% endif %}>未中</option>
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">起始时间</label>
+    <input type="datetime-local" name="start_dt" value="{{ filters.start_dt }}" class="form-control form-control-sm">
+  </div>
+  <div class="col">
+    <label class="form-label small">结束时间</label>
+    <input type="datetime-local" name="end_dt" value="{{ filters.end_dt }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary btn-sm">过滤</button>
+    <a href="/events/" class="btn btn-outline-secondary btn-sm">重置</a>
+  </div>
+</form>
+
+{% if page.paginator.count %}
+  <form method="post" action="{% url 'dashboard:events_bulk_delete' %}" class="mb-3" onsubmit="return confirm('确认删除当前筛选的全部 {{ page.paginator.count }} 条事件？&#10;（后台异步执行，进度在 runserver.err）');">
+    {% csrf_token %}
+    {% for k, v in filters.items %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <button type="submit" class="btn btn-outline-danger btn-sm">批量删除（{{ page.paginator.count }} 条）</button>
+  </form>
+{% endif %}
+
+<table class="table table-striped table-sm">
+  <thead><tr>
+    <th>#</th><th>检测时间</th><th>摄像头</th><th>检查项</th>
+    <th>命中</th><th>状态</th><th>缩略图</th>
+  </tr></thead>
+  <tbody>
+  {% for s in page.object_list %}
+    <tr>
+      <td><a href="{% url 'dashboard:event_detail' s.id %}">{{ s.id }}</a></td>
+      <td><small>{{ s.detected_at|date:"Y-m-d H:i:s" }}</small></td>
+      <td>{% if s.camera %}{{ s.camera.name }}{% else %}<span class="text-muted">已删</span>{% endif %}</td>
+      <td>{{ s.prompt_config.name }}</td>
+      <td>
+        {% if s.failure_reason %}
+          <span class="badge bg-secondary">FAIL[{{ s.failure_reason }}]</span>
+        {% elif s.auto_silenced %}
+          <span class="badge bg-warning">静默</span>
+        {% elif s.hit %}
+          <span class="badge bg-danger">命中</span>
+        {% else %}
+          <span class="badge bg-success">miss</span>
+        {% endif %}
+      </td>
+      <td><small>{{ s.status|default:"-" }}</small></td>
+      <td>
+        {% if s.img1_url %}
+          <img src="{{ s.img1_url }}" alt="" style="max-height:48px;max-width:80px;">
+        {% else %}
+          <span class="text-muted">-</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="text-muted">暂无事件。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if page.paginator.num_pages > 1 %}
+<nav aria-label="page" class="d-flex align-items-center gap-3">
+  <ul class="pagination pagination-sm mb-0">
+    {% if page.has_previous %}
+      <li class="page-item"><a class="page-link" href="?{% if filters.cam_id %}cam_id={{ filters.cam_id }}&{% endif %}{% if filters.prompt_id %}prompt_id={{ filters.prompt_id }}&{% endif %}{% if filters.kind %}kind={{ filters.kind }}&{% endif %}{% if filters.hit %}hit={{ filters.hit }}&{% endif %}{% if filters.start_dt %}start_dt={{ filters.start_dt }}&{% endif %}{% if filters.end_dt %}end_dt={{ filters.end_dt }}&{% endif %}page={{ page.previous_page_number }}">上一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">上一页</span></li>
+    {% endif %}
+    <li class="page-item active"><span class="page-link">{{ page.number }} / {{ page.paginator.num_pages }}</span></li>
+    {% if page.has_next %}
+      <li class="page-item"><a class="page-link" href="?{% if filters.cam_id %}cam_id={{ filters.cam_id }}&{% endif %}{% if filters.prompt_id %}prompt_id={{ filters.prompt_id }}&{% endif %}{% if filters.kind %}kind={{ filters.kind }}&{% endif %}{% if filters.hit %}hit={{ filters.hit }}&{% endif %}{% if filters.start_dt %}start_dt={{ filters.start_dt }}&{% endif %}{% if filters.end_dt %}end_dt={{ filters.end_dt }}&{% endif %}page={{ page.next_page_number }}">下一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">下一页</span></li>
+    {% endif %}
+  </ul>
+  <span class="text-muted small">第 {{ page.number }} / {{ page.paginator.num_pages }} 页（共 {{ page.paginator.count }} 条）</span>
+  <form method="get" class="d-flex align-items-center gap-2 mb-0">
+    {% for k, v in request.GET.items %}
+      {% if k != "page" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}
+    {% endfor %}
+    <label class="small text-muted mb-0">跳转</label>
+    <input type="number" name="page" min="1" max="{{ page.paginator.num_pages }}" value="{{ page.number }}" class="form-control form-control-sm" style="width:5rem;">
+    <button type="submit" class="btn btn-outline-secondary btn-sm">Go</button>
+  </form>
+</nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "_base.html" %}
+{% block title %}音频手动清理{% endblock %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">首页</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'dashboard:sound_detection_logs' %}">声音检测日志</a></li>
+    <li class="breadcrumb-item active">手动清理</li>
+  </ol>
+</nav>
+
+<h1 class="mb-3">音频手动清理</h1>
+
+<div class="alert alert-warning py-2 small">
+  <strong>不提供自动清理</strong>：录音长期保留，清理只能在这里手动触发。
+  执行顺序是「先定待删清单 → 删数据库记录 → 删录音文件」，删文件失败不会让记录回来，
+  失败项会留在下面的「孤儿文件」里，可重复清理。
+  部署前请配置磁盘容量监控（FLAC 最坏约 1.4 GB/天/路）。
+</div>
+
+<form method="get" class="row row-cols-1 row-cols-md-4 g-2 mb-3 align-items-end">
+  <div class="col">
+    <label class="form-label small">摄像头</label>
+    <select name="cam_id" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for c in cameras %}
+        <option value="{{ c.pk }}" {% if filters.cam_id == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.id }} · {{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">业务标签</label>
+    <select name="label" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for key, text in label_display.items %}
+        <option value="{{ key }}" {% if filters.label == key %}selected{% endif %}>{{ text }}（{{ key }}）判阳</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">起始时间</label>
+    <input type="datetime-local" name="start_dt" value="{{ filters.start_dt }}" class="form-control form-control-sm">
+  </div>
+  <div class="col">
+    <label class="form-label small">结束时间</label>
+    <input type="datetime-local" name="end_dt" value="{{ filters.end_dt }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary btn-sm">预览匹配</button>
+    <a href="{% url 'dashboard:audio_cleanup' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+  </div>
+</form>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>匹配范围（预览）</strong></div>
+      <div class="card-body">
+        <dl class="row mb-2">
+          <dt class="col-sm-6">检测日志</dt><dd class="col-sm-6">{{ preview.log_count }} 条</dd>
+          <dt class="col-sm-6">关联音频事件</dt><dd class="col-sm-6">{{ preview.event_count }} 个</dd>
+          <dt class="col-sm-6">音频文件</dt><dd class="col-sm-6">{{ preview.file_count }} 个 / {{ preview.total_mb }} MB</dd>
+        </dl>
+        {% if preview.truncated %}
+          <div class="alert alert-warning py-1 small mb-2">
+            匹配日志超过 {{ preview.scan_limit }} 条：上面的「关联事件 / 文件」是前
+            {{ preview.scan_limit }} 条的估算。点「确认清理」时仍按<strong>全部</strong>匹配记录执行。
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'dashboard:audio_cleanup_run' %}"
+              onsubmit="return confirm('确认删除 {{ preview.log_count }} 条日志、{{ preview.event_count }} 个事件及其录音（{{ preview.total_mb }} MB）？&#10;数据库记录不可恢复；录音文件同步删除。');">
+          {% csrf_token %}
+          {% for k, v in filters.items %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+          <button type="submit" class="btn btn-danger btn-sm"
+                  {% if not preview.log_count %}disabled{% endif %}>
+            确认清理（{{ preview.log_count }} 条日志 / {{ preview.event_count }} 个事件）
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header"><strong>孤儿音频文件</strong>
+        <small class="text-muted">（库里没引用、盘上还在 —— 清理重试入口）</small>
+      </div>
+      <div class="card-body">
+        <p class="mb-2">
+          共 <strong>{{ orphans.count }}</strong> 个 / <strong>{{ orphans.total_mb }}</strong> MB
+          {% if orphans.truncated %}
+            <span class="badge bg-warning text-dark">扫描到上限 {{ orphans.scan_limit }} 个文件，结果不完整</span>
+          {% endif %}
+        </p>
+        {% if orphans.paths %}
+          <ul class="small text-muted ps-3" style="max-height: 8rem; overflow: auto;">
+            {% for p in orphans.paths|slice:":20" %}<li><code>{{ p }}</code></li>{% endfor %}
+            {% if orphans.count > 20 %}<li>…共 {{ orphans.count }} 个</li>{% endif %}
+          </ul>
+        {% endif %}
+        <form method="post" action="{% url 'dashboard:audio_cleanup_orphans' %}"
+              onsubmit="return confirm('确认删除 {{ orphans.count }} 个孤儿音频文件（{{ orphans.total_mb }} MB）？');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger btn-sm"
+                  {% if not orphans.count %}disabled{% endif %}>
+            清理孤儿文件
+          </button>
+        </form>
+        <p class="text-muted small mb-0 mt-2">
+          扫描目录：<code>MEDIA_ROOT/audio_events/</code>（只认 <code>.flac</code>）
+        </p>
+      </div>
+    </div>
+  </div>
+
+  {% if preview.events %}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><strong>将被删除的事件</strong>
+        <small class="text-muted">（最多显示 20 个）</small>
+      </div>
+      <div class="card-body">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>事件</th><th>摄像头</th><th>开始（epoch 秒）</th><th>状态</th><th>录音</th></tr></thead>
+          <tbody>
+            {% for ev in preview.events %}
+              <tr>
+                <td><a href="{% url 'dashboard:audio_event_detail' ev.pk %}">#{{ ev.pk }}</a></td>
+                <td class="small">{% if ev.camera %}{{ ev.camera.name }}{% else %}<span class="text-muted">已删</span>{% endif %}</td>
+                <td class="small">{{ ev.started_at_ts }}</td>
+                <td class="small">{{ ev.get_status_display }}</td>
+                <td class="small">{% if ev.audio_path %}<span class="badge bg-secondary">有</span>{% else %}<span class="text-muted">无</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

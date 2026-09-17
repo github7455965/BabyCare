@@ -1,0 +1,220 @@
+{% extends "_base.html" %}
+{% block title %}{% if obj %}编辑 #{{ obj.pk }}{% else %}新建 prompt{% endif %}{% endblock %}
+{% block content %}
+<h1>
+  {% if obj %}编辑 #{{ obj.pk }} {{ obj.name }}{% else %}新建 VLM 检查项{% endif %}
+</h1>
+<p class="text-muted small">
+  <code>enabled</code>=配置层开关。手动暂停请到事件详情页操作（不再在本页）。
+</p>
+<form method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+  {% if form.warnings %}
+  <div class="alert alert-warning">
+    <strong>提示（不影响保存）：</strong>
+    {% for w in form.warnings %}<div>{{ w }}</div>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card mb-2">
+    <div class="card-header">基础</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.name.label }}{% if form.name.field.required %} *{% endif %}</label>
+        {{ form.name }}
+        {% if form.name.help_text %}<div class="form-text">{{ form.name.help_text }}</div>{% endif %}
+        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.kind.label }}</label>
+        {{ form.kind }}
+        {% if form.kind.help_text %}<div class="form-text">{{ form.kind.help_text }}</div>{% endif %}
+        {% if form.kind.errors %}<div class="text-danger small">{{ form.kind.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">提示词</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.target_classes.label }}</label>
+        <div>
+          {% for ck in form.target_classes %}{{ ck }} {% endfor %}
+        </div>
+        {% if form.target_classes.help_text %}<div class="form-text">{{ form.target_classes.help_text }}</div>{% endif %}
+        {% if form.target_classes.errors %}<div class="text-danger small">{{ form.target_classes.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.prompt.label }}{% if form.prompt.field.required %} *{% endif %}</label>
+        {{ form.prompt }}
+        {% if form.prompt.help_text %}<div class="form-text">{{ form.prompt.help_text }}</div>{% endif %}
+        {% if form.prompt.errors %}<div class="text-danger small">{{ form.prompt.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.positive_keyword.label }}</label>
+        {{ form.positive_keyword }}
+        {% if form.positive_keyword.help_text %}<div class="form-text">{{ form.positive_keyword.help_text }}</div>{% endif %}
+        {% if form.positive_keyword.errors %}<div class="text-danger small">{{ form.positive_keyword.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">触发控制</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.camera_ids.label }}</label>
+        {{ form.camera_ids }}
+        {% if form.camera_ids.help_text %}<div class="form-text">{{ form.camera_ids.help_text }}</div>{% endif %}
+        {% if form.camera_ids.errors %}<div class="text-danger small">{{ form.camera_ids.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.window_sec.label }}</label>
+        {{ form.window_sec }}
+        {% if form.window_sec.help_text %}<div class="form-text">{{ form.window_sec.help_text }}</div>{% endif %}
+        {% if form.window_sec.errors %}<div class="text-danger small">{{ form.window_sec.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="form-check mb-2">
+        {{ form.enabled }}
+        <label class="form-check-label">{{ form.enabled.label }}</label>
+        {% if form.enabled.help_text %}<div class="form-text">{{ form.enabled.help_text }}</div>{% endif %}
+        {% if form.enabled.errors %}<div class="text-danger small">{{ form.enabled.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">时间窗</div>
+    <div class="card-body">
+      <div class="form-check mb-2">
+        {{ form.time_window_enabled }}
+        <label class="form-check-label">{{ form.time_window_enabled.label }}</label>
+        {% if form.time_window_enabled.help_text %}<div class="form-text">{{ form.time_window_enabled.help_text }}</div>{% endif %}
+        {% if form.time_window_enabled.errors %}<div class="text-danger small">{{ form.time_window_enabled.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-md-6">
+          <label class="form-label">{{ form.time_window_start.label }}</label>
+          {{ form.time_window_start }}
+          {% if form.time_window_start.errors %}<div class="text-danger small">{{ form.time_window_start.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">{{ form.time_window_end.label }}</label>
+          {{ form.time_window_end }}
+          {% if form.time_window_end.errors %}<div class="text-danger small">{{ form.time_window_end.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.weekdays.label }}</label>
+        {{ form.weekdays }}
+        {% if form.weekdays.help_text %}<div class="form-text">{{ form.weekdays.help_text }}</div>{% endif %}
+        {% if form.weekdays.errors %}<div class="text-danger small">{{ form.weekdays.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">通知</div>
+    <div class="card-body">
+      <div class="form-check mb-2">
+        {{ form.notify_on_hit }}
+        <label class="form-check-label">{{ form.notify_on_hit.label }}</label>
+        {% if form.notify_on_hit.help_text %}<div class="form-text">{{ form.notify_on_hit.help_text }}</div>{% endif %}
+        {% if form.notify_on_hit.errors %}<div class="text-danger small">{{ form.notify_on_hit.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-1">
+        <label class="form-label">通知目标与条件</label>
+        <div class="form-text mb-2">
+          勾选 = 命中时通知该目标；条件 <code>always</code> = 命中就发，
+          <code>audio_rule</code> = 仅当音频三态为“满足”时发（音频不可用 UNKNOWN 时照样发）。
+        </div>
+        {% if form.notify_target_rows %}
+          {% for row in form.notify_target_rows %}
+          <div class="row g-2 align-items-center mb-2">
+            <div class="col-md-7">
+              <div class="form-check">
+                {{ row.enabled_field }}
+                <label class="form-check-label" for="{{ row.enabled_field.id_for_label }}">
+                  {{ row.target.name }}
+                  <span class="text-muted small">({{ row.target.get_kind_display }})</span>
+                  {% if not row.target.enabled %}<span class="badge bg-secondary">已停用</span>{% endif %}
+                </label>
+              </div>
+            </div>
+            <div class="col-md-5">
+              {{ row.condition_field }}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted small">
+            还没有通知目标。请先到 <a href="{% url 'config_panel:notify_targets_list' %}">通知目标</a> 页创建。
+          </p>
+        {% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.notify_title_template.label }}</label>
+        {{ form.notify_title_template }}
+        {% if form.notify_title_template.help_text %}<div class="form-text">{{ form.notify_title_template.help_text }}</div>{% endif %}
+        {% if form.notify_title_template.errors %}<div class="text-danger small">{{ form.notify_title_template.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.notify_body_template.label }}</label>
+        {{ form.notify_body_template }}
+        {% if form.notify_body_template.help_text %}<div class="form-text">{{ form.notify_body_template.help_text }}</div>{% endif %}
+        {% if form.notify_body_template.errors %}<div class="text-danger small">{{ form.notify_body_template.errors|join:" " }}</div>{% endif %}
+      </div>
+      <p class="text-muted small mb-0">
+        VLM 参数（max_tokens / timeout_*）与误报静默次数在模型层有默认值；如需调整直接改 Django admin 或 SQL。
+      </p>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">声音条件（音频三态）</div>
+    <div class="card-body">
+      <div class="form-check mb-2">
+        {{ form.audio_rule_enabled }}
+        <label class="form-check-label">{{ form.audio_rule_enabled.label }}</label>
+        {% if form.audio_rule_enabled.help_text %}<div class="form-text">{{ form.audio_rule_enabled.help_text }}</div>{% endif %}
+        {% if form.audio_rule_enabled.errors %}<div class="text-danger small">{{ form.audio_rule_enabled.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="row g-2 mb-2">
+        <div class="col-md-4">
+          <label class="form-label">{{ form.audio_rule_condition.label }}</label>
+          {{ form.audio_rule_condition }}
+          {% if form.audio_rule_condition.errors %}<div class="text-danger small">{{ form.audio_rule_condition.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.audio_rule_window_sec.label }}</label>
+          {{ form.audio_rule_window_sec }}
+          {% if form.audio_rule_window_sec.help_text %}<div class="form-text">{{ form.audio_rule_window_sec.help_text }}</div>{% endif %}
+          {% if form.audio_rule_window_sec.errors %}<div class="text-danger small">{{ form.audio_rule_window_sec.errors|join:" " }}</div>{% endif %}
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">{{ form.audio_rule_min_event_count.label }}</label>
+          {{ form.audio_rule_min_event_count }}
+          {% if form.audio_rule_min_event_count.help_text %}<div class="form-text">{{ form.audio_rule_min_event_count.help_text }}</div>{% endif %}
+          {% if form.audio_rule_min_event_count.errors %}<div class="text-danger small">{{ form.audio_rule_min_event_count.errors|join:" " }}</div>{% endif %}
+        </div>
+      </div>
+      <p class="text-muted small mb-0">
+        判定结果是三态：满足 / 确认不满足 / 不可用（UNKNOWN）。音频不可用时<strong>不参与筛选</strong>，
+        所有目标按原样发送 —— 与没有音频功能时的行为一致。
+      </p>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">保存</button>
+  <a class="btn btn-secondary" href="{% url 'config_panel:prompts_list' %}">返回列表</a>
+  {% if obj %}
+    <form method="post" action="{% url 'config_panel:prompt_delete' obj.pk %}"
+          style="display:inline" onsubmit="return confirm('删除 #{{ obj.pk }} {{ obj.name }}？')">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-danger">删除</button>
+    </form>
+  {% endif %}
+</form>
+{% endblock %}

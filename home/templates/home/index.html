@@ -1,0 +1,45 @@
+{% extends "_base.html" %}
+{% block title %}{{ project }}{% endblock %}
+{% block content %}
+<h1>BabyCare 控制台</h1>
+<p class="text-muted">vlm_url=<code>{{ vlm_url }}</code> · gpu_mode=<code>{{ gpu_mode }}</code></p>
+
+<div class="row row-cols-1 row-cols-md-2 g-3 mt-2">
+  <div class="col">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="card-title">摄像头配置</h5>
+        <p class="card-text">当前 <strong>{{ counts.cameras }}</strong> 个摄像头。</p>
+        <a href="/config/cameras/" class="btn btn-primary btn-sm">打开</a>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="card-title">VLM 检查项</h5>
+        <p class="card-text">当前 <strong>{{ counts.prompts }}</strong> 个检查项。</p>
+        <a href="/config/prompts/" class="btn btn-primary btn-sm">打开</a>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="card-title">事件</h5>
+        <p class="card-text">最近 24h 共 <strong>{{ counts.events_today }}</strong> 条；其中命中 <strong>{{ counts.events_hit_today }}</strong> 条。</p>
+        <a href="/events/" class="btn btn-primary btn-sm">查看</a>
+      </div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card h-100">
+      <div class="card-body">
+        <h5 class="card-title">日志</h5>
+        <p class="card-text text-muted small">v1 暂未实装（无持久化日志）。</p>
+        <a href="/logs/" class="btn btn-outline-secondary btn-sm disabled">打开</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Django
+*.sqlite3
+data/
+local_settings.py
+*.log
+
+# 运行产物（VLM 帧落盘 + 音频事件录音，spec §6.1）
+media/
+
+# 临时脚本
+scripts/tmp/
+
+# 环境
+.env
+.venv/
+venv/
+.venv-audio/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

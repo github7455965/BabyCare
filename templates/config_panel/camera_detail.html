@@ -1,0 +1,114 @@
+{% extends "_base.html" %}
+{% block title %}{% if obj %}编辑 #{{ obj.pk }}{% else %}新建摄像头{% endif %}{% endblock %}
+{% block content %}
+<h1>
+  {% if obj %}编辑 #{{ obj.pk }} {{ obj.name }}{% else %}新建摄像头{% endif %}
+</h1>
+<form method="post">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+
+  <div class="card mb-2">
+    <div class="card-header">基础</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.name.label }}{% if form.name.field.required %} *{% endif %}</label>
+        {{ form.name }}
+        {% if form.name.help_text %}<div class="form-text">{{ form.name.help_text }}</div>{% endif %}
+        {% if form.name.errors %}<div class="text-danger small">{{ form.name.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.source_type.label }}</label>
+        {{ form.source_type }}
+        {% if form.source_type.help_text %}<div class="form-text">{{ form.source_type.help_text }}</div>{% endif %}
+        {% if form.source_type.errors %}<div class="text-danger small">{{ form.source_type.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">视频源</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.file_path.label }}</label>
+        {{ form.file_path }}
+        {% if form.file_path.help_text %}<div class="form-text">{{ form.file_path.help_text }}</div>{% endif %}
+        {% if form.file_path.errors %}<div class="text-danger small">{{ form.file_path.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">ONVIF</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.onvif_host.label }}</label>
+        {{ form.onvif_host }}
+        {% if form.onvif_host.help_text %}<div class="form-text">{{ form.onvif_host.help_text }}</div>{% endif %}
+        {% if form.onvif_host.errors %}<div class="text-danger small">{{ form.onvif_host.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.onvif_port.label }}</label>
+        {{ form.onvif_port }}
+        {% if form.onvif_port.help_text %}<div class="form-text">{{ form.onvif_port.help_text }}</div>{% endif %}
+        {% if form.onvif_port.errors %}<div class="text-danger small">{{ form.onvif_port.errors|join:" " }}</div>{% endif %}
+      </div>
+      <div class="mb-3">
+        <label class="form-label">{{ form.onvif_username.label }}</label>
+        {{ form.onvif_username }}
+        {% if form.onvif_username.help_text %}<div class="form-text">{{ form.onvif_username.help_text }}</div>{% endif %}
+        {% if form.onvif_username.errors %}<div class="text-danger small">{{ form.onvif_username.errors|join:" " }}</div>{% endif %}
+        <div class="form-text">ONVIF 密码统一从 .env BABYCARE_ONVIF_PASSWORD 读，不入库。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">YOLO 检测</div>
+    <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label">{{ form.yolo_models.label }}</label>
+        <div>
+          {% for ck in form.yolo_models %}{{ ck }} {% endfor %}
+        </div>
+        {% if form.yolo_models.help_text %}<div class="form-text">{{ form.yolo_models.help_text }}</div>{% endif %}
+        {% if form.yolo_models.errors %}<div class="text-danger small">{{ form.yolo_models.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-2">
+    <div class="card-header">控制</div>
+    <div class="card-body">
+      <div class="form-check mb-3">
+        {{ form.is_active }}
+        <label class="form-check-label">{{ form.is_active.label }}</label>
+        {% if form.is_active.help_text %}<div class="form-text">{{ form.is_active.help_text }}</div>{% endif %}
+        {% if form.is_active.errors %}<div class="text-danger small">{{ form.is_active.errors|join:" " }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">保存</button>
+  <a class="btn btn-secondary" href="{% url 'config_panel:camera_list' %}">返回列表</a>
+</form>
+
+{% if obj %}
+<hr>
+<div class="card mb-3">
+  <div class="card-header">被 Prompt 引用（<strong>{{ referenced_by }}</strong> 个）</div>
+  <ul class="list-group list-group-flush">
+    {% for p in referenced_prompts %}
+      <li class="list-group-item"><a href="{% url 'config_panel:prompt_detail' p.pk %}">{{ p.name }}</a></li>
+    {% empty %}
+      <li class="list-group-item text-muted">无</li>
+    {% endfor %}
+  </ul>
+</div>
+<form method="post" action="{% url 'config_panel:camera_delete' obj.pk %}"
+      onsubmit="return confirm('删除 #{{ obj.pk }} {{ obj.name }}？')">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-outline-danger">删除</button>
+</form>
+{% endif %}
+{% endblock %}

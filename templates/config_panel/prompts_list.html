@@ -1,0 +1,85 @@
+{% extends "_base.html" %}
+{% block title %}VLM 检查项{% endblock %}
+{% block content %}
+<h1>VLM 检查项 <a class="btn btn-primary btn-sm" href="{% url 'config_panel:prompt_create' %}">新建</a></h1>
+
+<form method="get" class="row row-cols-1 row-cols-md-3 g-2 mb-3 align-items-end">
+  <div class="col">
+    <label class="form-label small">类型</label>
+    <select name="kind" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="judge" {% if filters.kind == "judge" %}selected{% endif %}>判断型</option>
+      <option value="describe" {% if filters.kind == "describe" %}selected{% endif %}>描述型</option>
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">启用</label>
+    <select name="enabled" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="1" {% if filters.enabled == "1" %}selected{% endif %}>启用</option>
+      <option value="0" {% if filters.enabled == "0" %}selected{% endif %}>禁用</option>
+    </select>
+  </div>
+  <div class="col">
+    <button type="submit" class="btn btn-primary btn-sm">过滤</button>
+    <a href="{% url 'config_panel:prompts_list' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+  </div>
+</form>
+
+<table class="table table-striped">
+  <thead><tr>
+    <th>#</th><th>名称</th><th>类型</th><th>窗口</th><th>摄像头</th><th>状态</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for p in page.object_list %}
+    <tr>
+      <td>{{ p.pk }}</td>
+      <td><a href="{% url 'config_panel:prompt_detail' p.pk %}">{{ p.name }}</a></td>
+      <td>{{ p.get_kind_display }}</td>
+      <td>{{ p.window_sec }}s</td>
+      <td>
+        <small>
+          {% for c in p.camera_ids.all %}
+            <span class="badge bg-info me-1">{{ c.name }}</span>
+          {% empty %}
+            <span class="text-muted">全部</span>
+          {% endfor %}
+        </small>
+      </td>
+      <td>
+        {% if p.manual_paused %}<span class="badge bg-warning">暂停</span>{% endif %}
+        {% if not p.enabled %}<span class="badge bg-secondary">禁用</span>{% endif %}
+        {% if p.notify_on_hit %}<span class="badge bg-info">通知</span>{% endif %}
+      </td>
+      <td>
+        <form method="post" action="{% url 'config_panel:prompt_delete' p.pk %}"
+              style="display:inline" onsubmit="return confirm('删除 #{{ p.pk }} {{ p.name }}？')">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger">删</button>
+        </form>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="7" class="text-muted">暂无。点上方"新建"。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if page.paginator.num_pages > 1 %}
+<nav aria-label="page">
+  <ul class="pagination pagination-sm">
+    {% if page.has_previous %}
+      <li class="page-item"><a class="page-link" href="?{% if filters.kind %}kind={{ filters.kind }}&{% endif %}{% if filters.enabled %}enabled={{ filters.enabled }}&{% endif %}page={{ page.previous_page_number }}">上一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">上一页</span></li>
+    {% endif %}
+    <li class="page-item active"><span class="page-link">{{ page.number }} / {{ page.paginator.num_pages }}</span></li>
+    {% if page.has_next %}
+      <li class="page-item"><a class="page-link" href="?{% if filters.kind %}kind={{ filters.kind }}&{% endif %}{% if filters.enabled %}enabled={{ filters.enabled }}&{% endif %}page={{ page.next_page_number }}">下一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">下一页</span></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

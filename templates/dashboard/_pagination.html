@@ -1,0 +1,33 @@
+{% comment %}
+分页条（需要 context: ``page`` / ``querystring``）。
+
+``querystring`` = 除 ``page`` 外的筛选条件 + ``&``；"跳转"表单再从 ``request.GET`` 重建隐藏域，
+所以翻页与跳页都不会丢筛选。窗口视图与事件视图共用（原先两边各抄了一份）。
+
+``colspan`` 不在这里处理 —— 分页条在表格之外，与列数无关。
+{% endcomment %}
+{% if page.paginator.num_pages > 1 %}
+<nav aria-label="page" class="d-flex align-items-center gap-3">
+  <ul class="pagination pagination-sm mb-0">
+    {% if page.has_previous %}
+      <li class="page-item"><a class="page-link" href="?{{ querystring }}page={{ page.previous_page_number }}">上一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">上一页</span></li>
+    {% endif %}
+    <li class="page-item active"><span class="page-link">{{ page.number }} / {{ page.paginator.num_pages }}</span></li>
+    {% if page.has_next %}
+      <li class="page-item"><a class="page-link" href="?{{ querystring }}page={{ page.next_page_number }}">下一页</a></li>
+    {% else %}
+      <li class="page-item disabled"><span class="page-link">下一页</span></li>
+    {% endif %}
+  </ul>
+  <form method="get" class="d-flex align-items-center gap-2 mb-0">
+    {% for k, v in request.GET.items %}
+      {% if k != "page" %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}
+    {% endfor %}
+    <label class="small text-muted mb-0">跳转</label>
+    <input type="number" name="page" min="1" max="{{ page.paginator.num_pages }}" value="{{ page.number }}" class="form-control form-control-sm" style="width:5rem;">
+    <button type="submit" class="btn btn-outline-secondary btn-sm">Go</button>
+  </form>
+</nav>
+{% endif %}

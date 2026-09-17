@@ -1,0 +1,78 @@
+# 09_web_vlm_manage 音频线依赖（独立 venv，不与 daphne 的 .venv 混用）
+#
+# 依据：docs/superpowers/specs/2026-09-07-audio-detection-design.md §9.2
+#
+# 为什么要独立 venv
+# -----------------
+# - YAMNet 只能走 TensorFlow，而 daphne 侧已有 PyTorch（ultralytics/YOLO）
+# - TF 与 torch 对 numpy / protobuf / setuptools 等有各自的版本约束
+#
+# 安装（PowerShell，项目根目录）
+# -----------------------------
+#   py -3.12 -m venv 09_web_vlm_manage\.venv-audio
+#   09_web_vlm_manage\.venv-audio\Scripts\python -m pip install -U pip
+#   09_web_vlm_manage\.venv-audio\Scripts\python -m pip install -r 09_web_vlm_manage\requirements-audio.txt
+#
+#   # 下模型资产（PANNs label 表 + checkpoint、YAMNet 类表）
+#   09_web_vlm_manage\.venv-audio\Scripts\python 09_web_vlm_manage\scripts\tmp\fetch_audio_models.py
+#
+# 版本策略
+# --------
+# 2026-09-12 首次构建，下列版本号是**实测可共存**的组合（pip check 通过）。
+# 改动任一重量级版本前请重跑：
+#   .venv-audio\Scripts\python scripts\tmp\audio_env_smoke.py
+
+# PyTorch 走 **CPU 轮子**（2026-09-15 从 cu121 换为 cpu，内存优化）：
+# - 音频线默认 CPU 推理（BABYCARE_AUDIO_USE_GPU=0），YAMNet 在 Windows 上永远只能 CPU
+#   （TF 官方自 2.11 起不再提供 Windows GPU 版），PANNs 1s 一窗 CPU 也只要 ~150ms ——
+#   CUDA 运行时纯属白背：实测 worker 进程 1528MB → 1204MB（−324MB），
+#   且曾因"与 llama-server/MOSS 抢内存"触发 WinError 1455（cufft64_11.dll 加载失败）。
+# - 若以后真要 GPU：换回 cu121 轮子 + BABYCARE_AUDIO_USE_GPU=1（PANNs 2s 窗 GPU 9ms vs CPU 83ms）。
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- setuptools 必须 <81 ---
+# tensorflow_hub 0.16.1 依赖 pkg_resources，而 setuptools 81+ 已移除该模块。
+# 不锁的话新 venv 里 pip 装完 setuptools 84 → `import tensorflow_hub` 直接 ModuleNotFoundError。
+setuptools<81
+
+# --- Django 侧（audio worker 用 ORM 读写 Camera / AudioRuntimeState / PromptAudioRule）---
+# Django 版本必须与主项目保持一致（主项目当前 5.1.15）
+Django>=5.1,<5.2
+python-dotenv>=1.0
+# 数据库驱动：DB_ENGINE=sqlite（默认）走 Python 自带的 sqlite3，无需安装。
+# DB_ENGINE=mysql 才需要（且必须与 web 侧同一个驱动版本）：
+#   .venv-audio\Scripts\python -m pip install mysqlclient
+# mysqlclient>=2.2,<2.3
+
+# --- ONVIF（音频 worker 自己探测音频 profile / 取 RTSP URI）---
+# 与视频线同一套库。音频 worker 不能依赖 web 进程传 URI：
+# 启动枚举摄像头、断流重连都需要它自己重新探测，否则跨进程状态会不一致。
+onvif-zeep>=0.2.12
+
+# --- HTTP（MOSS 音频服务，同机 127.0.0.1 调用）---
+requests>=2.31
+
+# --- 数值与音频 I/O ---
+# numpy 必须 <2.2：tensorflow 2.19.1 要求 numpy>=1.26,<2.2
+# （曾试过 <2，但 TF 2.19 依赖的 ml-dtypes 0.6 / contourpy 1.4 都要求 numpy>=2，不可满足）
+numpy>=2.1,<2.2
+scipy>=1.12,<1.15
+soundfile>=0.12
+librosa>=0.10.2
+
+# --- YAMNet（TensorFlow，必须保留的双模型之一）---
+# Python 3.12 需要 TensorFlow >= 2.16
+tensorflow>=2.16.1,<2.20
+tensorflow-hub>=0.16
+
+# --- PANNs（PyTorch，双模型之二）---
+# CPU 轮子（见顶部说明）：PANNs 推理量小（1s 一窗、~150ms），GPU 加速收益可忽略。
+torch==2.4.1+cpu
+torchlibrosa>=0.1.0
+panns-inference>=0.1.1
+
+# PANNs 用 32kHz 的 Cnn14（checkpoint Cnn14_mAP=0.431.pth，已定，见 spec §4.1）。
+# 对外统一 16kHz，推理前在内存高质量重采样到 32kHz。
+
+# --- FFmpeg ---
+# 不走 pip，是外部可执行文件；由 .env 的 BABYCARE_FFMPEG_BIN 指定路径

@@ -1,0 +1,158 @@
+{% extends "_base.html" %}
+{% block title %}事件 #{{ obj.pk }}{% endblock %}
+{% block content %}
+<h1>事件 #{{ obj.pk }}
+  <a class="btn btn-outline-secondary btn-sm" href="/events/">返回列表</a>
+  {% if obj.prompt_config %}
+    <form method="post" action="{% url 'dashboard:toggle_pause' obj.pk %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm {% if obj.prompt_config.manual_paused %}btn-success{% else %}btn-warning{% endif %}">
+        {% if obj.prompt_config.manual_paused %}恢复「{{ obj.prompt_config.name }}」{% else %}暂停「{{ obj.prompt_config.name }}」{% endif %}
+      </button>
+    </form>
+  {% endif %}
+</h1>
+
+{% if obj.failure_reason %}
+  <div class="alert alert-warning py-2">FAIL[{{ obj.failure_reason }}]</div>
+{% elif obj.auto_silenced %}
+  <div class="alert alert-warning py-2">静默（auto_silenced）</div>
+{% elif obj.hit %}
+  <div class="alert alert-danger py-2">命中</div>
+{% else %}
+  <div class="alert alert-success py-2">miss</div>
+{% endif %}
+
+<dl class="row">
+  <dt class="col-sm-2">id<small class="text-muted ms-2">（记录编号）</small></dt>
+  <dd class="col-sm-10">{{ obj.id }}</dd>
+
+  <dt class="col-sm-2">detected_at<small class="text-muted ms-2">（检测时间）</small></dt>
+  <dd class="col-sm-10">{{ obj.detected_at|date:"Y-m-d H:i:s" }}</dd>
+
+  <dt class="col-sm-2">camera<small class="text-muted ms-2">（摄像头）</small></dt>
+  <dd class="col-sm-10">{% if obj.camera %}{{ obj.camera.name }}{% else %}<span class="text-muted">已删</span>{% endif %}</dd>
+
+  <dt class="col-sm-2">prompt_config<small class="text-muted ms-2">（检查项）</small></dt>
+  <dd class="col-sm-10">{{ obj.prompt_config.name }}</dd>
+
+  <dt class="col-sm-2">ts_list<small class="text-muted ms-2">（帧时间戳序列（秒））</small></dt>
+  <dd class="col-sm-10">{{ human_ts_list|join:" / " }}</dd>
+
+  <dt class="col-sm-2">window_sec<small class="text-muted ms-2">（窗口长度（秒））</small></dt>
+  <dd class="col-sm-10">{{ obj.window_sec }}</dd>
+
+  <dt class="col-sm-2">hit<small class="text-muted ms-2">（是否命中）</small></dt>
+  <dd class="col-sm-10">{{ obj.hit }}</dd>
+
+  <dt class="col-sm-2">status<small class="text-muted ms-2">（VLM 回答文本）</small></dt>
+  <dd class="col-sm-10">{{ obj.status|default:"-" }}</dd>
+
+  <dt class="col-sm-2">raw_response<small class="text-muted ms-2">（VLM 原始响应）</small></dt>
+  <dd class="col-sm-10"><pre class="small mb-0">{{ obj.raw_response }}</pre></dd>
+
+  <dt class="col-sm-2">has_baby_in_window<small class="text-muted ms-2">（窗口内是否有 baby）</small></dt>
+  <dd class="col-sm-10">{{ obj.has_baby_in_window }}</dd>
+
+  <dt class="col-sm-2">failure_reason<small class="text-muted ms-2">（失败原因）</small></dt>
+  <dd class="col-sm-10">{{ obj.failure_reason|default:"-" }}</dd>
+
+  <dt class="col-sm-2">retry_count<small class="text-muted ms-2">（重试次数）</small></dt>
+  <dd class="col-sm-10">{{ obj.retry_count }}</dd>
+
+  <dt class="col-sm-2">notified<small class="text-muted ms-2">（是否已发通知）</small></dt>
+  <dd class="col-sm-10">{{ obj.notified }}</dd>
+
+  <dt class="col-sm-2">dismissed_as_false<small class="text-muted ms-2">（用户已标误报）</small></dt>
+  <dd class="col-sm-10">{{ obj.dismissed_as_false }}</dd>
+
+  <dt class="col-sm-2">auto_silenced<small class="text-muted ms-2">（已自动静默）</small></dt>
+  <dd class="col-sm-10">{{ obj.auto_silenced }}</dd>
+
+  <dt class="col-sm-2">extra<small class="text-muted ms-2">（扩展数据）</small></dt>
+  <dd class="col-sm-10"><code>{{ obj.extra }}</code></dd>
+
+  <dt class="col-sm-2">created_at<small class="text-muted ms-2">（写入时间）</small></dt>
+  <dd class="col-sm-10">{{ obj.created_at|date:"Y-m-d H:i:s" }}</dd>
+</dl>
+
+<h3>窗口期声音判定
+  <small class="text-muted">（该 VLM 窗的音频三态，spec §7.1）</small>
+</h3>
+{% if audio_links %}
+<div class="table-responsive mb-4">
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>判定</th><th>条件</th><th>事件数</th><th>覆盖</th>
+        <th>判定窗口(epoch)</th><th>参考音频事件</th><th>原因</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in audio_links %}
+      <tr>
+        <td><span class="badge {{ a.badge }}">{{ a.label }}</span></td>
+        {% if a.configured %}
+        <td>{{ a.condition }}</td>
+        <td class="small">
+          {{ a.event_count|default:"-" }}
+          <span class="text-muted">(哭 {{ a.cry_count|default:0 }} / 说 {{ a.speech_count|default:0 }})</span>
+        </td>
+        <td class="small">
+          {% if a.covered %}<span class="badge bg-success">覆盖完整</span>
+          {% else %}<span class="badge bg-warning text-dark">覆盖不完整</span>{% endif %}
+          {% if a.service_available == False %}<span class="badge bg-secondary">音频服务未起</span>{% endif %}
+          {% if a.camera_status and a.camera_status != "ready" %}<span class="badge bg-secondary">{{ a.camera_status }}</span>{% endif %}
+        </td>
+        <td class="small text-muted">{{ a.window_start_ts }} ~ {{ a.window_end_ts }}</td>
+        <td>
+          {% if a.audio_event %}
+            <a href="{% url 'dashboard:audio_event_detail' a.audio_event.pk %}">音频事件 #{{ a.audio_event.pk }}</a>
+            <span class="text-muted small">· {{ a.audio_event.duration_sec|floatformat:1 }}s
+              · {{ a.audio_event.description_status }}</span>
+          {% else %}<span class="text-muted">无（阴性/UNKNOWN）</span>{% endif %}
+        </td>
+        <td class="small text-muted">{{ a.reason_label }}</td>
+        {% else %}
+        <td colspan="6" class="small text-muted">
+          <strong>{{ a.reason_label }}</strong>：到
+          {% if obj.prompt_config_id %}
+            <a href="{% url 'config_panel:prompt_detail' obj.prompt_config_id %}">本检查项</a>
+          {% else %}该检查项{% endif %}
+          的「声音条件」卡片里启用并选条件（哭声 / 说话声 / 无说话声 …）；
+          未配置时该检查项的所有窗口都会是「无法判定」。
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-muted small mb-4">
+  没有音频判定记录：该检查项没有 <code>audio_rule</code> 目标，或音频三态未参与本窗。
+</p>
+{% endif %}
+
+<h3>帧图片</h3>
+<div class="row g-3">
+  <div class="col-md-4">
+    <p class="small text-muted mb-1">img1<small class="text-muted ms-1">（最早帧）</small>{% if img1_human_ts %} · ts={{ img1_human_ts }}{% endif %}</p>
+    {% if obj.img1_url %}
+      <a href="{{ obj.img1_url }}" target="_blank"><img src="{{ obj.img1_url }}" class="img-fluid border" style="max-width:400px;"></a>
+    {% else %}<span class="text-muted">无</span>{% endif %}
+  </div>
+  <div class="col-md-4">
+    <p class="small text-muted mb-1">img2<small class="text-muted ms-1">（中间帧）</small>{% if img2_human_ts %} · ts={{ img2_human_ts }}{% endif %}</p>
+    {% if obj.img2_url %}
+      <a href="{{ obj.img2_url }}" target="_blank"><img src="{{ obj.img2_url }}" class="img-fluid border" style="max-width:400px;"></a>
+    {% else %}<span class="text-muted">无</span>{% endif %}
+  </div>
+  <div class="col-md-4">
+    <p class="small text-muted mb-1">img3<small class="text-muted ms-1">（最晚帧）</small>{% if img3_human_ts %} · ts={{ img3_human_ts }}{% endif %}</p>
+    {% if obj.img3_url %}
+      <a href="{{ obj.img3_url }}" target="_blank"><img src="{{ obj.img3_url }}" class="img-fluid border" style="max-width:400px;"></a>
+    {% else %}<span class="text-muted">无</span>{% endif %}
+  </div>
+</div>
+{% endblock %}

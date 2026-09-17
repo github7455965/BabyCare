@@ -1,0 +1,203 @@
+{% extends "_base.html" %}
+{% block title %}声音检测日志{% endblock %}
+{% block content %}
+<h1 class="mb-3">声音检测 · 按窗口</h1>
+{% include "dashboard/_audio_view_tabs.html" %}
+
+<div class="alert alert-info py-2 small">
+  音频窗口按 <strong>稀疏落库</strong>（阳性 / 近阈值 / 状态变化才落库），所以本页的
+  「非阳性」只代表<strong>被采样落库的</strong>窗口，<strong>不代表</strong>该时间段真的没有声音。
+  一次完整声音的合并视图见
+  <a href="{% url 'dashboard:sound_events_list' %}{{ shared_qs }}">按音频事件</a>。
+  <a href="{% url 'dashboard:audio_cleanup' %}" class="ms-2">手动清理 →</a>
+</div>
+
+<form method="get" class="row row-cols-1 row-cols-md-4 g-2 mb-3 align-items-end">
+  <div class="col">
+    <label class="form-label small">摄像头</label>
+    <select name="cam_id" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for c in cameras %}
+        <option value="{{ c.pk }}" {% if filters.cam_id == c.pk|stringformat:"s" %}selected{% endif %}>{{ c.id }} · {{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">业务标签</label>
+    <select name="label" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for key, text in label_display.items %}
+        <option value="{{ key }}" {% if filters.label == key %}selected{% endif %}>{{ text }}（{{ key }}）判阳</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">共识结果</label>
+    <select name="decision" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="positive" {% if filters.decision == "positive" %}selected{% endif %}>阳性（共识/单侧高置信度）</option>
+      <option value="single_side" {% if filters.decision == "single_side" %}selected{% endif %}>单模型阳性（共识不成立）</option>
+      <option value="negative" {% if filters.decision == "negative" %}selected{% endif %}>无声音</option>
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">落库原因</label>
+    <select name="log_reason" class="form-select form-select-sm">
+      <option value="">全部</option>
+      {% for key, text in log_reasons %}
+        <option value="{{ key }}" {% if filters.log_reason == key %}selected{% endif %}>{{ text }}（{{ key }}）</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">音频事件</label>
+    <select name="has_event" class="form-select form-select-sm">
+      <option value="">全部</option>
+      <option value="1" {% if filters.has_event == "1" %}selected{% endif %}>已形成音频事件</option>
+      <option value="0" {% if filters.has_event == "0" %}selected{% endif %}>未形成音频事件</option>
+    </select>
+  </div>
+  <div class="col">
+    <label class="form-label small">起始时间</label>
+    <input type="datetime-local" name="start_dt" value="{{ filters.start_dt }}" class="form-control form-control-sm">
+  </div>
+  <div class="col">
+    <label class="form-label small">结束时间</label>
+    <input type="datetime-local" name="end_dt" value="{{ filters.end_dt }}" class="form-control form-control-sm">
+  </div>
+  <div class="col">
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="model_error" value="1" id="model_error"
+             {% if filters.model_error == "1" %}checked{% endif %}>
+      <label class="form-check-label small" for="model_error">只看模型异常 / 降级</label>
+    </div>
+  </div>
+  <div class="col-12">
+    <button type="submit" class="btn btn-primary btn-sm">过滤</button>
+    <a href="{% url 'dashboard:sound_detection_logs' %}" class="btn btn-outline-secondary btn-sm">重置</a>
+    <span class="text-muted small ms-2">共 {{ page.paginator.count }} 条</span>
+  </div>
+</form>
+
+{% if truncated %}
+  <div class="alert alert-warning py-2 small">
+    「音频事件」筛选需要逐条做时间相交判定，只扫描了前 {{ scan_limit }} 条候选；
+    请叠加时间范围缩小结果。
+  </div>
+{% endif %}
+
+<table class="table table-striped table-sm align-middle">
+  <thead><tr>
+    <th>#</th><th>窗口时间</th><th>摄像头</th><th>判定</th><th>分数（Y/P）</th>
+    <th>落库原因</th><th>音频事件</th><th>音频健康</th>
+  </tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.log.id }}</td>
+      <td class="small">
+        {{ row.window_start }}
+        <div class="text-muted">→ {{ row.window_end }}</div>
+      </td>
+      <td class="small">
+        {% if row.log.camera %}{{ row.log.camera.name }}{% else %}<span class="text-muted">已删</span>{% endif %}
+      </td>
+      <td>
+        {% if row.decision == "positive" %}
+          <span class="badge bg-danger">{{ row.decision_display }}</span>
+        {% elif row.decision == "degraded" %}
+          <span class="badge bg-warning text-dark">{{ row.decision_display }}</span>
+        {% else %}
+          <span class="badge bg-secondary">{{ row.decision_display }}</span>
+        {% endif %}
+        {% if row.failure_reason %}
+          <div class="small text-danger">{{ row.failure_reason }}</div>
+        {% endif %}
+      </td>
+      <td class="small">
+        {% for l in row.labels %}
+          <div>
+            {{ l.display }}
+            {% if l.state == "positive" %}
+              <span class="badge bg-danger">positive</span>
+            {% elif l.state == "abstain" %}
+              <span class="badge bg-warning text-dark">abstain</span>
+            {% else %}
+              <span class="badge bg-light text-dark border">negative</span>
+            {% endif %}
+            <br>
+            Y {% if l.yamnet is not None %}{{ l.yamnet|floatformat:3 }}{% else %}-{% endif %}
+            / P {% if l.panns is not None %}{{ l.panns|floatformat:3 }}{% else %}-{% endif %}
+            {% if l.reason %}<span class="text-muted">（{{ l.reason }}）</span>{% endif %}
+          </div>
+        {% empty %}
+          <span class="text-muted">-</span>
+        {% endfor %}
+      </td>
+      <td class="small">{{ row.log_reason_display|default:"-" }}</td>
+      <td class="small">
+        {% for ev in row.events %}
+          <div>
+            <a href="{% url 'dashboard:audio_event_detail' ev.pk %}">#{{ ev.pk }}</a>
+            <span class="text-muted">{{ ev.started_at_ts }}</span>
+          </div>
+        {% empty %}
+          <span class="text-muted">-</span>
+        {% endfor %}
+      </td>
+      <td class="small">
+        {% if row.runtime %}
+          {% if row.runtime.status == "ready" %}
+            <span class="badge bg-success">{{ row.runtime.status_display }}</span>
+          {% elif row.runtime.status == "degraded" %}
+            <span class="badge bg-warning text-dark">{{ row.runtime.status_display }}</span>
+          {% else %}
+            <span class="badge bg-secondary">{{ row.runtime.status_display }}</span>
+          {% endif %}
+          {% if row.runtime.last_error %}
+            <div class="text-danger">{{ row.runtime.last_error }}</div>
+          {% endif %}
+        {% else %}
+          <span class="text-muted">无记录</span>
+        {% endif %}
+      </td>
+    </tr>
+    <tr class="table-light">
+      <td colspan="8" class="py-1">
+        <details>
+          <summary class="small text-muted">Top-K 与阈值明细</summary>
+          <div class="row small">
+            <div class="col-md-4">
+              <strong>YAMNet Top-K</strong>
+              {% if not row.yamnet_ok %}<span class="badge bg-danger">模型异常</span>{% endif %}
+              <ol class="mb-0 ps-3">
+                {% for name, score in row.yamnet_top %}<li>{{ name }} — {{ score }}</li>{% empty %}<li class="text-muted">-</li>{% endfor %}
+              </ol>
+            </div>
+            <div class="col-md-4">
+              <strong>PANNs Top-K</strong>
+              {% if not row.panns_ok %}<span class="badge bg-danger">模型异常</span>{% endif %}
+              <ol class="mb-0 ps-3">
+                {% for name, score in row.panns_top %}<li>{{ name }} — {{ score }}</li>{% empty %}<li class="text-muted">-</li>{% endfor %}
+              </ol>
+            </div>
+            <div class="col-md-4">
+              <strong>阈值（策略 {{ row.strategy|default:"-" }}）</strong>
+              <ul class="mb-0 ps-3">
+                {% for l in row.labels %}
+                  <li>{{ l.display }}：Y {{ l.threshold_yamnet|default:"-" }} / P {{ l.threshold_panns|default:"-" }}</li>
+                {% empty %}<li class="text-muted">-</li>{% endfor %}
+              </ul>
+            </div>
+          </div>
+        </details>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="8" class="text-muted">暂无日志（音频线未运行过，或没有命中筛选的落库窗口）。</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% include "dashboard/_pagination.html" %}
+{% endblock %}

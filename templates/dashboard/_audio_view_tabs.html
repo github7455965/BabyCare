@@ -1,0 +1,18 @@
+{% comment %}
+音频线的两种展示粒度切换（需要 context: ``audio_view`` / ``shared_qs``）。
+
+- 按窗口：``SoundDetectionLog``，一行 = 一个推理窗（看模型当时怎么判）；
+- 按事件：``AudioEvent``，一行 = 一次完整声音（看响了几次、录到没有、描述模型怎么说）。
+
+两个视图各自保留自己的专有筛选，公共的「摄像头 + 时间范围」由 ``shared_qs`` 带过去。
+{% endcomment %}
+<ul class="nav nav-pills mb-3">
+  <li class="nav-item">
+    <a class="nav-link py-1 px-3{% if audio_view == 'window' %} active{% endif %}"
+       href="{% url 'dashboard:sound_detection_logs' %}{{ shared_qs }}">按窗口</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link py-1 px-3{% if audio_view == 'event' %} active{% endif %}"
+       href="{% url 'dashboard:sound_events_list' %}{{ shared_qs }}">按音频事件</a>
+  </li>
+</ul>
