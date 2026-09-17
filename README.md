@@ -170,7 +170,7 @@ llama-server.exe ^
 |---|---|---|
 | 适用 | 已有 MySQL / 多机 / 高并发写 | **单机部署，不想装数据库** |
 | 依赖 | `pip install mysqlclient` | 无（Python 自带 `sqlite3`） |
-| 数据位置 | MySQL 服务端 | `data/db.sqlite3`（已被 .gitignore 忽略） |
+| 数据位置 | MySQL 服务端 | `data/db.sqlite3` |
 | 建库 | 需手动建 `babycare_vlm` | 自动创建 |
 | `manage.py test` | 需要建库权限 | 开箱即用 |
 | 跨机器共享 | 支持 | **不支持**（SQLite 不能放网络盘） |
@@ -207,8 +207,4 @@ web_vlm_manage/
 python manage.py test
 ```
 
-## 隐私说明
 
-- `media/`（帧图、事件录音）与 `data/`（数据库、日志）都是运行时产物，已在 `.gitignore` 中排除，不会被提交；如果你的部署涉及真实婴儿画面/录音，请勿将这两个目录的任何内容发布到公共渠道。
-- `.env` 存放密钥（数据库密码、ONVIF 密码、HA token 等），同样被 `.gitignore` 排除；请勿提交，也不要在 issue / 截图中泄露。
-- 仓库内的 `.env.example` 只含占位值。
